@@ -1,0 +1,74 @@
+# ============================================================================
+# 1. Java / Gradle / Minecraft Mod 构建缓存与产物
+# ============================================================================
+.gradle/
+**/build/
+!**/src/**/build/
+out/
+bin/
+target/
+
+# Minecraft 本地运行与调试目录 (Loom / NeoGradle / ForgeGradle)
+run/
+runs/
+**/run/
+**/runs/
+.fabric/
+.mixin.out/
+logs/
+crash-reports/
+
+# 编译产物与临时包
+*.class
+*.log
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+!gradle/wrapper/gradle-wrapper.jar
+
+# ============================================================================
+# 2. Arduino / ESP32 / PlatformIO / ESP-IDF 嵌入式固件构建产物
+# ============================================================================
+.pio/
+.arduino/
+**/build/
+*.bin
+*.elf
+*.map
+*.hex
+*.uf2
+sdkconfig.old
+
+# 本地 Wi-Fi 密钥或私有配置覆盖文件（如有）
+secrets.h
+**/secrets.h
+local.properties
+**/local.properties
+
+# ============================================================================
+# 3. IDE 与编辑器配置
+# ============================================================================
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+
+# ============================================================================
+# 4. 操作系统临时文件
+# ============================================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.swp
+*.swo
+*~

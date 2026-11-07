@@ -1,0 +1,12 @@
+{
+  "blockstate": {
+    "variants": {
+      "powered=false": { "model": "mciot:block/iot_transceiver_off" },
+      "powered=true":  { "model": "mciot:block/iot_transceiver_on" }
+    }
+  },
+  "lang_zh_cn": {
+    "block.mciot.iot_transceiver": "IoT 物联信号收发方块",
+    "itemGroup.mciot": "MC-IoT 硬件物联"
+  }
+}
