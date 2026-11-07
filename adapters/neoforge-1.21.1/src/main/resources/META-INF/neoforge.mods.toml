@@ -1,0 +1,12 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="mciot"
+version="1.0.0"
+displayName="MC-IoT Bidirectional Platform"
+authors="xiefuzhu"
+description='''
+Universal ESP32 <-> Minecraft Bidirectional IoT & Plugin Bridge (NeoForge 1.21.1)
+'''

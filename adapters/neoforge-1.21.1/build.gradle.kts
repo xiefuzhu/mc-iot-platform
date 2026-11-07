@@ -1,0 +1,49 @@
+plugins {
+    id("net.neoforged.moddev") version "2.0.74"
+}
+
+group = "com.mciot"
+version = project.findProperty("mod_version") ?: "1.0.0"
+
+base {
+    archivesName.set("mciot-neoforge-1.21.1")
+}
+
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+}
+
+neoForge {
+    version = "21.1.72"
+    mods {
+        create("mciot") {
+            sourceSet(sourceSets.main.get())
+        }
+    }
+}
+
+dependencies {
+    implementation(project(":mciot-core"))
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir("../mc-1.21.1/src/main/java")
+            srcDir("../mc-1.20.1/src/main/java")
+            include("**/NeoForgeEntryV1211.java", "**/IoTTransceiverBlockV1211.java", "**/McWorldBridgeV1201.java", "**/IoTTransceiverBlockV1201.java")
+        }
+        resources {
+            srcDir("src/main/resources")
+            srcDir("../../shared-resources")
+        }
+    }
+}
+
+tasks.jar {
+    from(project(":mciot-core").sourceSets.main.get().output)
+}
+
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+}

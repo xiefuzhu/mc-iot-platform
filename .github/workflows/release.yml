@@ -1,0 +1,120 @@
+name: Build & Release MC-IoT Mods
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-matrix:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Core (Universal)"
+            task: ":mciot-core:jar"
+            java: "17"
+            artifact: "mciot-core"
+            path: "mciot-core/build/libs/*.jar"
+
+          - name: "Fabric 1.20.1"
+            task: ":adapters:fabric-1.20.1:build"
+            java: "17"
+            artifact: "mciot-fabric-1.20.1"
+            path: "adapters/fabric-1.20.1/build/libs/*-1.0*.jar"
+
+          - name: "Forge 1.20.1"
+            task: ":adapters:forge-1.20.1:build"
+            java: "17"
+            artifact: "mciot-forge-1.20.1"
+            path: "adapters/forge-1.20.1/build/libs/*.jar"
+
+          - name: "Fabric 1.21.1"
+            task: ":adapters:fabric-1.21.1:build"
+            java: "21"
+            artifact: "mciot-fabric-1.21.1"
+            path: "adapters/fabric-1.21.1/build/libs/*-1.0*.jar"
+
+          - name: "NeoForge 1.21.1"
+            task: ":adapters:neoforge-1.21.1:build"
+            java: "21"
+            artifact: "mciot-neoforge-1.21.1"
+            path: "adapters/neoforge-1.21.1/build/libs/*.jar"
+
+          - name: "Fabric 1.21.4 / 26.1"
+            task: ":adapters:fabric-26.1:build"
+            java: "21"
+            artifact: "mciot-fabric-26.1"
+            path: "adapters/fabric-26.1/build/libs/*-1.0*.jar"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: ${{ matrix.java }}
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build ${{ matrix.name }}
+        run: gradle ${{ matrix.task }} --no-daemon
+
+      - name: Upload Artifact (${{ matrix.artifact }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.path }}
+            !**/*-sources.jar
+            !**/*-dev.jar
+
+  release:
+    name: Publish GitHub Release
+    needs: build-matrix
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all built Mod JARs
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Package ESP32-S3 Firmware ZIP
+        run: |
+          zip -r release-assets/esp32-s3-mc-iot-firmware.zip firmware/mc_iot_node
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/*.jar
+            release-assets/*.zip
+          body: |
+            ### MC-IoT 跨版本双向物联模组 & ESP32-S3 固件发布
+            - **包含产物**：
+              - `mciot-fabric-1.20.1-*.jar` (Fabric 1.20.1 ~ 1.20.4)
+              - `mciot-forge-1.20.1-*.jar` (Forge 1.20.1)
+              - `mciot-fabric-1.21.1-*.jar` (Fabric 1.20.5 ~ 1.21.1)
+              - `mciot-neoforge-1.21.1-*.jar` (NeoForge 1.21.1)
+              - `mciot-fabric-26.1-*.jar` (Fabric 1.21.2 ~ 26.1+)
+              - `esp32-s3-mc-iot-firmware.zip` (ESP32-S3 零依赖双向插件化固件)
