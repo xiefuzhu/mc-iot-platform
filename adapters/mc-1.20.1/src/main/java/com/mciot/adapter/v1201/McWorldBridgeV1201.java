@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 /**
  * [Minecraft 1.20.1 ~ 1.20.4 适配层] 世界桥接与指令注册
@@ -38,10 +39,10 @@ public final class McWorldBridgeV1201 implements IMcWorldBridge {
                 BlockPos pos = new BlockPos(posKey.x(), posKey.y(), posKey.z());
                 if (!level.isLoaded(pos)) continue;
                 BlockState state = level.getBlockState(pos);
-                if (state.getBlock() instanceof IoTTransceiverBlockV1201) {
+                if (state.hasProperty(BlockStateProperties.POWERED) && state.hasProperty(BlockStateProperties.POWER)) {
                     BlockState next = state
-                            .setValue(IoTTransceiverBlockV1201.POWERED, powered)
-                            .setValue(IoTTransceiverBlockV1201.POWER, redstoneSignal);
+                            .setValue(BlockStateProperties.POWERED, powered)
+                            .setValue(BlockStateProperties.POWER, redstoneSignal);
                     level.setBlock(pos, next, 3);
                     level.updateNeighborsAt(pos, state.getBlock());
                 }

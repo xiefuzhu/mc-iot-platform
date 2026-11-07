@@ -30,13 +30,17 @@ sourceSets {
             exclude("**/ForgeEntryV1201.java")
         }
         resources {
-            srcDir("src/main/resources")
             srcDir("../../shared-resources")
         }
     }
 }
 
+tasks.processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(project(":mciot-core").sourceSets.main.get().output)
 }
 
