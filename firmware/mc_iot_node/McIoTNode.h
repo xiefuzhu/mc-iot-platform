@@ -1,7 +1,12 @@
 #pragma once
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiUdp.h>
+#include <Preferences.h>
 #include <esp_http_server.h>
+#include <lwip/sockets.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <vector>
 
 // ============================================================================
@@ -68,6 +73,12 @@ public:
 
   // 初始化所有插件与本地调试面板
   void begin() {
+    _prefs.begin("mciot", false);
+    _cachedHost = _prefs.getString("last_ip", "");
+    if ((_mcHost.length() == 0 || _mcHost == "auto" || _mcHost == "192.168.1.100") && _cachedHost.length() > 0) {
+      _mcHost = _cachedHost;
+      Serial.printf("[McIoT] Loaded last known MC server IP from NVS: %s\n", _mcHost.c_str());
+    }
     for (auto* plugin : _plugins) {
       plugin->setup(*this);
       Serial.printf("[McIoT] Plugin initialized: %s\n", plugin->name());
@@ -86,7 +97,14 @@ public:
       if (!_wsConnected) {
         if (now - _lastReconnectAttempt >= 3000) {
           _lastReconnectAttempt = now;
-          connectWs();
+          if (!connectWs()) {
+            // 当前 IP 无法连接时，自动在局域网搜索开启了 25580 端口的 Minecraft 电脑
+            String foundIp = discoverLanServer();
+            if (foundIp.length() > 0) {
+              _mcHost = foundIp;
+              connectWs();
+            }
+          }
         }
       } else {
         pollWs();
@@ -101,9 +119,7 @@ public:
     }
 
     // 3. 运行所有挂载的硬件插件
-    for (auto* plugin : _plugins) {
-      plugin->loop(*this);
-    }
+    pollPlugins();
   }
 
   // 【核心上行接口】向 Minecraft 发送事件（任何插件一行代码即可调用）
@@ -138,10 +154,13 @@ public:
 private:
   String _deviceId;
   String _mcHost;
+  String _cachedHost;
   uint16_t _mcPort;
   String _mcPath;
 
   WiFiClient _wsClient;
+  WiFiUDP _udp;
+  Preferences _prefs;
   bool _wsConnected = false;
   unsigned long _lastReconnectAttempt = 0;
   unsigned long _lastPingTime = 0;
@@ -149,6 +168,12 @@ private:
 
   std::vector<McIoTPlugin*> _plugins;
   httpd_handle_t _httpServer = NULL;
+
+  void pollPlugins() {
+    for (auto* plugin : _plugins) {
+      plugin->loop(*this);
+    }
+  }
 
   static String escapeJson(const String& s) {
     String out;
@@ -194,12 +219,12 @@ private:
 
   // 建立原生 RFC6455 WebSocket 握手
   bool connectWs() {
-    if (_mcHost.length() == 0 || _mcHost == "0.0.0.0") return false;
+    if (_mcHost.length() == 0 || _mcHost == "0.0.0.0" || _mcHost == "auto") return false;
     Serial.printf("[McIoT] Connecting to MC Server ws://%s:%u%s ...\n",
                   _mcHost.c_str(), _mcPort, _mcPath.c_str());
 
     _wsClient.stop();
-    if (!_wsClient.connect(_mcHost.c_str(), _mcPort, 1500)) {
+    if (!_wsClient.connect(_mcHost.c_str(), _mcPort, 800)) {
       return false;
     }
     _wsClient.setNoDelay(true); // 开启 TCP_NODELAY 降低延迟
@@ -238,12 +263,151 @@ private:
 
     _wsConnected = true;
     _lastPingTime = millis();
+    if (_cachedHost != _mcHost) {
+      _cachedHost = _mcHost;
+      _prefs.putString("last_ip", _mcHost);
+    }
     _lastLog = "Connected to MC (" + _mcHost + ":" + String(_mcPort) + ")";
-    Serial.println("[McIoT] WebSocket connected");
+    Serial.printf("[McIoT] WebSocket connected to %s:%u\n", _mcHost.c_str(), _mcPort);
 
     // 发送设备上线注册包
     send("system", "hello", 1, _deviceId);
     return true;
+  }
+
+  // 自动在局域网内搜索运行了 MC-IoT 模组的电脑 (UDP 广播优先 + TCP 子网并发探测兜底)
+  String discoverLanServer() {
+    if (WiFi.status() != WL_CONNECTED) return "";
+    _lastLog = "Auto-discovering MC Server on LAN...";
+    Serial.printf("[McIoT] Auto-discovering MC Server on LAN (port %u)...\n", _mcPort);
+
+    // 1. 尝试 UDP 广播毫秒级发现
+    String found = discoverViaUdp();
+    if (found.length() > 0) {
+      Serial.printf("[McIoT] Discovered MC Server via UDP: %s\n", found.c_str());
+      return found;
+    }
+
+    // 2. 尝试局域网同网段非阻塞并发 TCP 端口扫描 (即使路由器隔离广播或使用旧版模组也能秒级发现)
+    found = discoverViaTcpScan();
+    if (found.length() > 0) {
+      Serial.printf("[McIoT] Discovered MC Server via TCP subnet scan: %s\n", found.c_str());
+      return found;
+    }
+
+    Serial.println("[McIoT] No active MC Server found on LAN yet, will retry...");
+    return "";
+  }
+
+  String discoverViaUdp() {
+    IPAddress localIp = WiFi.localIP();
+    IPAddress mask = WiFi.subnetMask();
+    IPAddress subnetBroadcast((uint32_t)localIp | (~(uint32_t)mask));
+    IPAddress globalBroadcast(255, 255, 255, 255);
+
+    _udp.begin(0);
+    const char* msg = "MCIOT_DISCOVER";
+
+    _udp.beginPacket(subnetBroadcast, _mcPort);
+    _udp.write((const uint8_t*)msg, strlen(msg));
+    _udp.endPacket();
+
+    _udp.beginPacket(globalBroadcast, _mcPort);
+    _udp.write((const uint8_t*)msg, strlen(msg));
+    _udp.endPacket();
+
+    unsigned long start = millis();
+    while (millis() - start < 220) {
+      int pktSize = _udp.parsePacket();
+      if (pktSize > 0) {
+        char buf[64] = {0};
+        int len = _udp.read(buf, sizeof(buf) - 1);
+        if (len > 0 && String(buf).startsWith("MCIOT_HERE")) {
+          String ip = _udp.remoteIP().toString();
+          _udp.stop();
+          return ip;
+        }
+      }
+      pollPlugins();
+      delay(5);
+    }
+    _udp.stop();
+    return "";
+  }
+
+  String discoverViaTcpScan() {
+    IPAddress localIp = WiFi.localIP();
+    if (localIp[0] == 0) return "";
+
+    const int batchSize = 16;
+    int socks[batchSize];
+    int hostIds[batchSize];
+
+    for (int base = 1; base <= 254; base += batchSize) {
+      int count = 0;
+      for (int i = 0; i < batchSize && (base + i) <= 254; ++i) {
+        int lastOctet = base + i;
+        if (lastOctet == localIp[3]) continue; // 跳过本机 IP
+
+        int s = lwip_socket(AF_INET, SOCK_STREAM, 0);
+        if (s < 0) break;
+
+        int flags = lwip_fcntl(s, F_GETFL, 0);
+        lwip_fcntl(s, F_SETFL, flags | O_NONBLOCK);
+
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(_mcPort);
+        IPAddress targetIp(localIp[0], localIp[1], localIp[2], lastOctet);
+        addr.sin_addr.s_addr = (uint32_t)targetIp;
+
+        lwip_connect(s, (struct sockaddr*)&addr, sizeof(addr));
+        socks[count] = s;
+        hostIds[count] = lastOctet;
+        count++;
+      }
+
+      if (count == 0) continue;
+
+      fd_set writeSet;
+      FD_ZERO(&writeSet);
+      int maxFd = -1;
+      for (int i = 0; i < count; ++i) {
+        FD_SET(socks[i], &writeSet);
+        if (socks[i] > maxFd) maxFd = socks[i];
+      }
+
+      struct timeval tv;
+      tv.tv_sec = 0;
+      tv.tv_usec = 75000; // 每批 16 个 IP 仅等待 75ms，全网段扫描约 1.1 秒
+
+      String foundIp = "";
+      int ready = lwip_select(maxFd + 1, NULL, &writeSet, NULL, &tv);
+      if (ready > 0) {
+        for (int i = 0; i < count; ++i) {
+          if (FD_ISSET(socks[i], &writeSet)) {
+            int err = 0;
+            socklen_t errLen = sizeof(err);
+            if (lwip_getsockopt(socks[i], SOL_SOCKET, SO_ERROR, &err, &errLen) == 0 && err == 0) {
+              IPAddress hit(localIp[0], localIp[1], localIp[2], hostIds[i]);
+              foundIp = hit.toString();
+              break;
+            }
+          }
+        }
+      }
+
+      for (int i = 0; i < count; ++i) {
+        lwip_close(socks[i]);
+      }
+
+      pollPlugins(); // 保持按钮与灯光在扫描期间零卡顿响应
+      if (foundIp.length() > 0) {
+        return foundIp;
+      }
+    }
+    return "";
   }
 
   void disconnectWs() {

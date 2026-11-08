@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -30,6 +32,7 @@ public final class McIoTServer {
     private final List<ClientSession> sessions = new CopyOnWriteArrayList<>();
     private ExecutorService executor;
     private ServerSocket serverSocket;
+    private DatagramSocket udpSocket;
     private volatile boolean running = false;
     private int currentPort = 25580;
 
@@ -51,7 +54,8 @@ public final class McIoTServer {
                 return t;
             });
             executor.submit(this::acceptLoop);
-            System.out.println("[McIoT] Bidirectional Server started on port " + port + " (WebSocket /ws & HTTP /api/event)");
+            startUdpDiscovery(port);
+            System.out.println("[McIoT] Bidirectional Server started on port " + port + " (WebSocket /ws, HTTP /api/event, UDP Auto-Discovery)");
             return true;
         } catch (IOException e) {
             System.err.println("[McIoT] Failed to bind port " + port + ": " + e.getMessage());
@@ -65,6 +69,10 @@ public final class McIoTServer {
             session.close();
         }
         sessions.clear();
+        if (udpSocket != null) {
+            udpSocket.close();
+            udpSocket = null;
+        }
         if (serverSocket != null) {
             try { serverSocket.close(); } catch (IOException ignored) {}
             serverSocket = null;
@@ -87,6 +95,32 @@ public final class McIoTServer {
         byte[] frame = encodeWsTextFrame(json);
         for (ClientSession session : sessions) {
             session.sendFrame(frame);
+        }
+    }
+
+    private void startUdpDiscovery(int port) {
+        try {
+            udpSocket = new DatagramSocket(null);
+            udpSocket.setReuseAddress(true);
+            udpSocket.bind(new InetSocketAddress("0.0.0.0", port));
+            executor.submit(() -> {
+                byte[] buf = new byte[256];
+                while (running && udpSocket != null && !udpSocket.isClosed()) {
+                    try {
+                        DatagramPacket packet = new DatagramPacket(buf, buf.length);
+                        udpSocket.receive(packet);
+                        String req = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8).trim();
+                        if (req.startsWith("MCIOT_DISCOVER")) {
+                            byte[] reply = ("MCIOT_HERE:" + currentPort).getBytes(StandardCharsets.UTF_8);
+                            DatagramPacket resp = new DatagramPacket(reply, reply.length, packet.getAddress(), packet.getPort());
+                            udpSocket.send(resp);
+                        }
+                    } catch (IOException ignored) {
+                    }
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("[McIoT] UDP discovery bind skipped: " + e.getMessage());
         }
     }
 

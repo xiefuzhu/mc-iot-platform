@@ -8,8 +8,9 @@
 const char* WIFI_NAME     = "OpenWrt_2.4G";
 const char* WIFI_PASSWORD = "";
 
-// Minecraft 电脑的局域网 IP，或者内网穿透出来的域名 (如 "frp.example.com")
-const char* MC_SERVER_HOST = "192.168.1.100";
+// 填 "auto" 即可在局域网内自动发现运行了 Minecraft 模组的电脑（即便电脑 IP 变动也能自动重连）
+// 如果使用跨网内网穿透，也可以直接填穿透域名 (如 "frp.example.com")
+const char* MC_SERVER_HOST = "auto";
 const uint16_t MC_SERVER_PORT = 25580;
 
 // 实例化核心物联节点 (设备名: "esp32-s3-01")
