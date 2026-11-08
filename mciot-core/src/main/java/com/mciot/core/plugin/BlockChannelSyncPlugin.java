@@ -9,7 +9,7 @@ import com.mciot.core.protocol.IoTMessage;
 /**
  * 内置核心插件 1：双向方块状态与红石信号同步插件。
  * - 上行 (ESP32 -> MC)：当收到单片机的按钮/旋钮通道信号时，自动改变对应通道绑定的所有 IoT 方块的开关与红石信号强度 (0~15)。
- * - 下行 (MC -> ESP32)：当玩家在游戏里点击 IoT 方块，或者用红石电路激活该方块时，自动把信号反向发回给单片机！
+ * - 下行 (MC -> ESP32)：当玩家在游戏里点击 IoT 方块，或者用红石电路激活该方块时，自动把信号反向发回给单片机。
  */
 public final class BlockChannelSyncPlugin implements IMcIoTPlugin {
     @Override

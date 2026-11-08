@@ -18,7 +18,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 /**
- * [Forge 1.20.1 入口点] 同样仅 45 行胶水代码！
+ * [Forge 1.20.1 入口点] 同样仅 45 行胶水代码。
  */
 @Mod(ForgeEntryV1201.MOD_ID)
 public class ForgeEntryV1201 {

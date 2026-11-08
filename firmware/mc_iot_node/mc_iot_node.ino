@@ -16,14 +16,14 @@ const uint16_t MC_SERVER_PORT = 25580;
 McIoTNode iotNode("esp32-s3-01", MC_SERVER_HOST, MC_SERVER_PORT);
 
 // ============================================================================
-// 2. 插件挂载区：以后添加任何新按钮、旋钮、传感器，只需在这里 new 一行即可！
+// 2. 插件挂载区：以后添加任何新按钮、旋钮、传感器，只需在这里 new 一行即可
 // ============================================================================
 
-// [默认启用 1] 板载 BOOT 按键 (GPIO 0)：无需外接任何电路即可测试！
+// [默认启用 1] 板载 BOOT 按键 (GPIO 0)：无需外接任何电路即可测试
 // 按一下切换 MC 内绑定 "btn_boot" 通道的方块开关与红石信号 (0 <-> 15)
 DigitalButtonPlugin bootButton(0, "btn_boot", true, true);
 
-// [默认启用 2] 板载 RGB 彩灯 (GPIO 48)：演示 MC -> 单片机 反向控制！
+// [默认启用 2] 板载 RGB 彩灯 (GPIO 48)：演示 MC -> 单片机 反向控制
 // 当 MC 世界发生雷暴(thunder)、下雨(rain)、晴天(clear) 或玩家激活方块时自动变幻灯效
 OnboardRgbEffectPlugin onboardRgb(48);
 
@@ -64,7 +64,7 @@ void setup() {
   }
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("[WiFi] Connected! IP: ");
+    Serial.print("[WiFi] Connected, IP: ");
     Serial.println(WiFi.localIP());
   } else {
     Serial.println("[WiFi] Still connecting in background...");

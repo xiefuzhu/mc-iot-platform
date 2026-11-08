@@ -24,8 +24,8 @@ import net.minecraft.world.phys.BlockHitResult;
  * 功能：
  * 1. 放置时自动绑定当前选定的硬件通道 (默认 "btn_boot")
  * 2. 潜行(Shift)+右键：将方块重新绑定到 /mciot bind <channel> 设定的通道
- * 3. 普通右键：在游戏内手动切换方块开关，并【反向推送】信号给 ESP32 单片机！
- * 4. 外部红石激活：当游戏内红石电路给此方块充能时，自动【反向推送】红石强度给 ESP32！
+ * 3. 普通右键：在游戏内手动切换方块开关，并【反向推送】信号给 ESP32 单片机。
+ * 4. 外部红石激活：当游戏内红石电路给此方块充能时，自动【反向推送】红石强度给 ESP32。
  */
 public class IoTTransceiverBlockV1201 extends Block {
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
@@ -76,7 +76,7 @@ public class IoTTransceiverBlockV1201 extends Block {
             McIoTHub.getInstance().bindBlock(key, channel);
             player.displayClientMessage(Component.literal("§a[MC-IoT] 该方块已绑定至硬件通道: §e" + channel), true);
         } else {
-            // 普通右键：翻转方块开关状态，并反向发送给 ESP32 单片机！
+            // 普通右键：翻转方块开关状态，并反向发送给 ESP32 单片机。
             boolean nextPowered = !state.getValue(POWERED);
             int nextSignal = nextPowered ? 15 : 0;
             level.setBlock(pos, state.setValue(POWERED, nextPowered).setValue(POWER, nextSignal), 3);

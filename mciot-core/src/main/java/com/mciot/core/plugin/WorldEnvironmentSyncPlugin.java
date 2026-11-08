@@ -7,7 +7,7 @@ import com.mciot.core.api.WorldEventContext;
 /**
  * 内置核心插件 2：Minecraft 世界天气与环境反向推送插件 (MC -> ESP32)。
  * 当游戏世界发生晴天 (clear)、下雨 (rain)、雷暴 (thunder) 或昼夜变化时，
- * 自动向所有连接的 ESP32 单片机推送事件！
+ * 自动向所有连接的 ESP32 单片机推送事件。
  */
 public final class WorldEnvironmentSyncPlugin implements IMcIoTPlugin {
     private String lastWeather = "";

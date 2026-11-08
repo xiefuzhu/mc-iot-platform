@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 
 /**
- * [Fabric 1.20.1 ~ 1.20.4 入口点] 仅 35 行胶水代码！
+ * [Fabric 1.20.1 ~ 1.20.4 入口点] 仅 35 行胶水代码。
  */
 public class FabricEntryV1201 implements ModInitializer {
     public static final String MOD_ID = "mciot";

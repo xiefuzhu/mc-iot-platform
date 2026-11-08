@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 /**
  * [Minecraft 1.20.1 ~ 1.20.4 适配层] 世界桥接与指令注册
- * Fabric 与 Forge 共用这一个不到 120 行的桥接器！
+ * Fabric 与 Forge 共用这一个不到 120 行的桥接器。
  */
 public final class McWorldBridgeV1201 implements IMcWorldBridge {
     private final MinecraftServer server;
@@ -78,7 +78,7 @@ public final class McWorldBridgeV1201 implements IMcWorldBridge {
      * - /mciot status                        查看当前连接的单片机数量与监听端口
      * - /mciot bind <channel>                设置接下来放置/潜行右键方块时绑定的硬件通道名
      * - /mciot port <port>                   动态修改监听端口（方便内网穿透）
-     * - /mciot send <channel> <event> <val>  在游戏内直接向单片机发送任意反向信号！
+     * - /mciot send <channel> <event> <val>  在游戏内直接向单片机发送任意反向信号。
      */
     public static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("mciot")

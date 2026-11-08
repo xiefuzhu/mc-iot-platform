@@ -2,7 +2,7 @@ package com.mciot.core.api;
 
 /**
  * 跨版本 Minecraft 世界桥接接口。
- * 1.20.1 ~ 26.1 各版本只需实现此接口中的 3 个方法，即可让所有核心功能与插件跨版本运行！
+ * 1.20.1 ~ 26.1 各版本只需实现此接口中的 3 个方法，即可让所有核心功能与插件跨版本运行。
  */
 public interface IMcWorldBridge {
     /**

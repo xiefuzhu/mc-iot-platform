@@ -18,7 +18,7 @@ struct IoTMsg {
 class McIoTNode;
 
 // ============================================================================
-// 2. 极简插件基类：后期扩展任何传感器/执行器只需继承此类！
+// 2. 极简插件基类：后期扩展任何传感器/执行器只需继承此类
 // ============================================================================
 class McIoTPlugin {
 public:
@@ -33,7 +33,7 @@ public:
   // 主循环高频调用（例如检测按钮、读取传感器并通过 node.send() 发送给 MC）
   virtual void loop(McIoTNode& node) {}
 
-  // 【反向接收能力】当收到来自 Minecraft 的事件时自动触发！
+  // 【反向接收能力】当收到来自 Minecraft 的事件时自动触发
   // 例如：MC 打雷 (channel="weather", event="thunder") 或 MC 方块被右键/红石激活
   virtual void onMessage(McIoTNode& node, const IoTMsg& msg) {}
 };
@@ -239,7 +239,7 @@ private:
     _wsConnected = true;
     _lastPingTime = millis();
     _lastLog = "Connected to MC (" + _mcHost + ":" + String(_mcPort) + ")";
-    Serial.println("[McIoT] WebSocket connected!");
+    Serial.println("[McIoT] WebSocket connected");
 
     // 发送设备上线注册包
     send("system", "hello", 1, _deviceId);
