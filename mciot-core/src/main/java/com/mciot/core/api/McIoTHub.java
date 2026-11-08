@@ -26,6 +26,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 3. 游戏内 IoT 方块坐标 <-> 硬件通道 (Channel) 的绑定映射表
  */
 public final class McIoTHub {
+    private static final Path BINDINGS_FILE = Paths.get("mciot-bindings.txt");
     private static final McIoTHub INSTANCE = new McIoTHub();
 
     private final McIoTServer netServer;
@@ -37,8 +38,6 @@ public final class McIoTHub {
     private volatile IMcWorldBridge worldBridge;
     private volatile String pendingBindChannel = "btn_boot"; // 默认右键绑定的通道名
     private int configuredPort = 25580;
-
-    private static final Path BINDINGS_FILE = Paths.get("mciot-bindings.txt");
 
     private McIoTHub() {
         this.netServer = new McIoTServer(this::handleIncomingFromDevice);
