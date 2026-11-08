@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.mciot"
-version = project.findProperty("mod_version") ?: "1.0.0"
+version = project.findProperty("mod_version") ?: "0.0.4"
 
 base {
     archivesName.set("mciot-fabric-26.1")
@@ -41,6 +41,10 @@ sourceSets {
 
 tasks.processResources {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    inputs.property("version", project.version)
+    filesMatching("fabric.mod.json") {
+        expand("version" to project.version)
+    }
 }
 
 tasks.jar {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "mciot",
-  "version": "1.0.0",
+  "version": "${version}",
   "name": "MC-IoT Bidirectional Platform",
   "description": "Universal ESP32 <-> Minecraft Bidirectional IoT & Plugin Bridge (1.20.1 ~ 1.20.4)",
   "authors": ["xiefuzhu"],
