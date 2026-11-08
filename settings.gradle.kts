@@ -11,6 +11,7 @@ pluginManagement {
 rootProject.name = "mc-iot-platform"
 
 include(":mciot-core")
+include(":modernui-stub")
 
 // 按需独立挂载单个目标适配器，彻底隔离 Java 17 / Java 21 以及不同版本 Loom / ModDevGradle 的插件冲突。
 val targetAdapter = providers.gradleProperty("targetAdapter").orNull

@@ -21,6 +21,7 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:0.92.2+1.20.1")
 
     implementation(project(":mciot-core"))
+    compileOnly(project(":modernui-stub"))
 }
 
 sourceSets {

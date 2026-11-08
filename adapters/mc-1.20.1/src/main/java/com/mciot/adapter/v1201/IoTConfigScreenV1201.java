@@ -29,8 +29,14 @@ public final class IoTConfigScreenV1201 extends Screen {
     }
 
     public static void open(String dimension, int x, int y, int z) {
+        BlockPosKey key = new BlockPosKey(dimension, x, y, z);
         Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> mc.setScreen(new IoTConfigScreenV1201(new BlockPosKey(dimension, x, y, z))));
+        mc.execute(() -> {
+            if (IoTModernUiSupport.tryOpen(key)) {
+                return;
+            }
+            mc.setScreen(new IoTConfigScreenV1201(key));
+        });
     }
 
     @Override

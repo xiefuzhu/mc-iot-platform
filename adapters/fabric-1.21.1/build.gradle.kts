@@ -21,6 +21,7 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:0.105.0+1.21.1")
 
     implementation(project(":mciot-core"))
+    compileOnly(project(":modernui-stub"))
 }
 
 sourceSets {
@@ -28,7 +29,7 @@ sourceSets {
         java {
             srcDir("../mc-1.21.1/src/main/java")
             srcDir("../mc-1.20.1/src/main/java")
-            include("**/FabricEntryV1211.java", "**/IoTTransceiverBlockV1211.java", "**/McWorldBridgeV1201.java", "**/IoTConfigScreenV1201.java")
+            include("**/FabricEntryV1211.java", "**/IoTTransceiverBlockV1211.java", "**/McWorldBridgeV1201.java", "**/IoTConfigScreenV1201.java", "**/IoTModernUi*.java")
         }
         resources {
             srcDir("../../shared-resources")

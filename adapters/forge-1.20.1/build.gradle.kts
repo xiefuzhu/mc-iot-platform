@@ -24,6 +24,7 @@ legacyForge {
 
 dependencies {
     implementation(project(":mciot-core"))
+    compileOnly(project(":modernui-stub"))
 }
 
 sourceSets {
