@@ -52,33 +52,7 @@ public class FabricEntryV2601 implements ModInitializer {
                 McWorldBridgeV1201.registerCommands(dispatcher));
 
         ServerLifecycleEvents.SERVER_STARTED.register(server ->
-                McIoTHub.getInstance().onServerStarted(new IMcWorldBridge() {
-                    @Override
-                    public void runOnServerThread(Runnable task) { server.execute(task); }
-
-                    @Override
-                    public void applyIoTBlockState(BlockPosKey posKey, boolean powered, int redstoneSignal) {
-                        for (ServerLevel level : server.getAllLevels()) {
-                            if (level.dimension().location().toString().equals(posKey.dimension())) {
-                                BlockPos pos = new BlockPos(posKey.x(), posKey.y(), posKey.z());
-                                if (!level.isLoaded(pos)) continue;
-                                BlockState state = level.getBlockState(pos);
-                                if (state.getBlock() instanceof IoTTransceiverBlockV1211) {
-                                    BlockState next = state
-                                            .setValue(IoTTransceiverBlockV1211.POWERED, powered)
-                                            .setValue(IoTTransceiverBlockV1211.POWER, redstoneSignal);
-                                    level.setBlock(pos, next, 3);
-                                    level.updateNeighborsAt(pos, state.getBlock());
-                                }
-                            }
-                        }
-                    }
-
-                    @Override
-                    public void broadcastSystemChat(String message) {
-                        server.getPlayerList().broadcastSystemMessage(Component.literal(message), false);
-                    }
-                }));
+                McIoTHub.getInstance().onServerStarted(new McWorldBridgeV1201(server)));
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server ->
                 McIoTHub.getInstance().onServerStopping());

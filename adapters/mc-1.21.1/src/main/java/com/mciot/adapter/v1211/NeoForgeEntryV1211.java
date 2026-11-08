@@ -46,39 +46,8 @@ public class NeoForgeEntryV1211 {
 
         IEventBus gameBus = NeoForge.EVENT_BUS;
         gameBus.addListener((RegisterCommandsEvent e) -> McWorldBridgeV1201.registerCommands(e.getDispatcher()));
-        gameBus.addListener((ServerStartedEvent e) -> McIoTHub.getInstance().onServerStarted(new Bridge(e.getServer())));
+        gameBus.addListener((ServerStartedEvent e) -> McIoTHub.getInstance().onServerStarted(new McWorldBridgeV1201(e.getServer())));
         gameBus.addListener((ServerStoppingEvent e) -> McIoTHub.getInstance().onServerStopping());
         gameBus.addListener((ServerTickEvent.Post e) -> McWorldBridgeV1201.onServerTick(e.getServer()));
-    }
-
-    private static final class Bridge implements IMcWorldBridge {
-        private final MinecraftServer server;
-        Bridge(MinecraftServer server) { this.server = server; }
-
-        @Override
-        public void runOnServerThread(Runnable task) { server.execute(task); }
-
-        @Override
-        public void applyIoTBlockState(BlockPosKey posKey, boolean powered, int redstoneSignal) {
-            for (ServerLevel level : server.getAllLevels()) {
-                if (level.dimension().location().toString().equals(posKey.dimension())) {
-                    BlockPos pos = new BlockPos(posKey.x(), posKey.y(), posKey.z());
-                    if (!level.isLoaded(pos)) continue;
-                    BlockState state = level.getBlockState(pos);
-                    if (state.getBlock() instanceof IoTTransceiverBlockV1211) {
-                        BlockState next = state
-                                .setValue(IoTTransceiverBlockV1211.POWERED, powered)
-                                .setValue(IoTTransceiverBlockV1211.POWER, redstoneSignal);
-                        level.setBlock(pos, next, 3);
-                        level.updateNeighborsAt(pos, state.getBlock());
-                    }
-                }
-            }
-        }
-
-        @Override
-        public void broadcastSystemChat(String message) {
-            server.getPlayerList().broadcastSystemMessage(Component.literal(message), false);
-        }
     }
 }

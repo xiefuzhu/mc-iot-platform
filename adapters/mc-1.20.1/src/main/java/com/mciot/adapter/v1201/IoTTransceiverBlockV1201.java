@@ -81,6 +81,9 @@ public class IoTTransceiverBlockV1201 extends Block {
             int nextSignal = nextPowered ? 15 : 0;
             level.setBlock(pos, state.setValue(POWERED, nextPowered).setValue(POWER, nextSignal), 3);
             level.updateNeighborsAt(pos, this);
+            for (Direction dir : Direction.values()) {
+                level.updateNeighborsAt(pos.relative(dir), this);
+            }
 
             String boundChannel = McIoTHub.getInstance().getBoundChannel(key);
             McIoTHub.getInstance().fireWorldEvent(new WorldEventContext(
@@ -121,6 +124,11 @@ public class IoTTransceiverBlockV1201 extends Block {
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+        return state.getValue(POWERED) ? state.getValue(POWER) : 0;
+    }
+
+    @Override
+    public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         return state.getValue(POWERED) ? state.getValue(POWER) : 0;
     }
 }

@@ -10,9 +10,11 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
@@ -45,6 +47,9 @@ public final class McWorldBridgeV1201 implements IMcWorldBridge {
                             .setValue(BlockStateProperties.POWER, redstoneSignal);
                     level.setBlock(pos, next, 3);
                     level.updateNeighborsAt(pos, state.getBlock());
+                    for (Direction dir : Direction.values()) {
+                        level.updateNeighborsAt(pos.relative(dir), state.getBlock());
+                    }
                 }
             }
         }
@@ -56,11 +61,28 @@ public final class McWorldBridgeV1201 implements IMcWorldBridge {
     }
 
     /**
-     * 在服务端 Tick 中调用（每 20 Tick = 1 秒检查一次主世界天气变化并反向同步给 ESP32）
+     * 在服务端 Tick 中调用（每 20 Tick = 1 秒检查一次主世界天气变化并反向同步给 ESP32，同时自动注册玩家附近已有的 IoT 方块）
      */
     public static void onServerTick(MinecraftServer server) {
         ServerLevel overworld = server.overworld();
         if (overworld.getGameTime() % 20 != 0) return;
+
+        McIoTHub hub = McIoTHub.getInstance();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            ServerLevel level = player.serverLevel();
+            String dim = level.dimension().location().toString();
+            BlockPos center = player.blockPosition();
+            for (BlockPos p : BlockPos.betweenClosed(center.offset(-10, -4, -10), center.offset(10, 4, 10))) {
+                if (!level.isLoaded(p)) continue;
+                BlockState st = level.getBlockState(p);
+                if (st.getBlock().getClass().getSimpleName().startsWith("IoTTransceiverBlock")) {
+                    BlockPosKey key = new BlockPosKey(dim, p.getX(), p.getY(), p.getZ());
+                    if (!hub.isBlockBound(key)) {
+                        hub.bindBlock(key, hub.getPendingBindChannel());
+                    }
+                }
+            }
+        }
 
         String weather = overworld.isThundering() ? "thunder" : (overworld.isRaining() ? "rain" : "clear");
         int intensity = overworld.isThundering() ? 15 : (overworld.isRaining() ? 8 : 0);

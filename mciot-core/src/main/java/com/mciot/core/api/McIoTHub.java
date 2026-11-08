@@ -5,6 +5,12 @@ import com.mciot.core.plugin.BlockChannelSyncPlugin;
 import com.mciot.core.plugin.WorldEnvironmentSyncPlugin;
 import com.mciot.core.protocol.IoTMessage;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +38,11 @@ public final class McIoTHub {
     private volatile String pendingBindChannel = "btn_boot"; // 默认右键绑定的通道名
     private int configuredPort = 25580;
 
+    private static final Path BINDINGS_FILE = Paths.get("mciot-bindings.txt");
+
     private McIoTHub() {
         this.netServer = new McIoTServer(this::handleIncomingFromDevice);
+        loadBindingsFromDisk();
         // 默认挂载两个核心双向插件
         registerPlugin(new BlockChannelSyncPlugin());
         registerPlugin(new WorldEnvironmentSyncPlugin());
@@ -62,6 +71,7 @@ public final class McIoTHub {
      */
     public void onServerStarted(IMcWorldBridge bridge) {
         this.worldBridge = bridge;
+        loadBindingsFromDisk();
         this.netServer.start(configuredPort);
     }
 
@@ -69,6 +79,7 @@ public final class McIoTHub {
      * 当 Minecraft 服务端关闭时由各版本 Adapter 调用
      */
     public void onServerStopping() {
+        saveBindingsToDisk();
         this.netServer.stop();
         this.worldBridge = null;
     }
@@ -95,9 +106,10 @@ public final class McIoTHub {
     // 方块坐标 <-> 硬件通道 (Channel) 绑定管理
     // ========================================================================
     public void bindBlock(BlockPosKey pos, String channel) {
-        unbindBlock(pos);
+        unbindBlockInternal(pos);
         posToChannel.put(pos, channel);
         channelToPositions.computeIfAbsent(channel, k -> ConcurrentHashMap.newKeySet()).add(pos);
+        saveBindingsToDisk();
 
         // 如果该通道已有最新状态，立即同步到新绑定的方块
         Integer lastVal = channelLastValue.get(channel);
@@ -108,10 +120,55 @@ public final class McIoTHub {
     }
 
     public void unbindBlock(BlockPosKey pos) {
+        if (unbindBlockInternal(pos)) {
+            saveBindingsToDisk();
+        }
+    }
+
+    private boolean unbindBlockInternal(BlockPosKey pos) {
         String oldChannel = posToChannel.remove(pos);
         if (oldChannel != null) {
             Set<BlockPosKey> set = channelToPositions.get(oldChannel);
             if (set != null) set.remove(pos);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean isBlockBound(BlockPosKey pos) {
+        return posToChannel.containsKey(pos);
+    }
+
+    private synchronized void saveBindingsToDisk() {
+        try (BufferedWriter writer = Files.newBufferedWriter(BINDINGS_FILE, StandardCharsets.UTF_8)) {
+            for (Map.Entry<BlockPosKey, String> entry : posToChannel.entrySet()) {
+                BlockPosKey k = entry.getKey();
+                writer.write(k.dimension() + "|" + k.x() + "|" + k.y() + "|" + k.z() + "|" + entry.getValue());
+                writer.newLine();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private synchronized void loadBindingsFromDisk() {
+        if (!Files.exists(BINDINGS_FILE)) return;
+        try (BufferedReader reader = Files.newBufferedReader(BINDINGS_FILE, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.trim().split("\\|");
+                if (parts.length == 5) {
+                    BlockPosKey key = new BlockPosKey(
+                            parts[0],
+                            Integer.parseInt(parts[1]),
+                            Integer.parseInt(parts[2]),
+                            Integer.parseInt(parts[3])
+                    );
+                    String ch = parts[4];
+                    posToChannel.put(key, ch);
+                    channelToPositions.computeIfAbsent(ch, k -> ConcurrentHashMap.newKeySet()).add(key);
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 
