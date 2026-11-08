@@ -1,5 +1,6 @@
 package com.mciot.adapter.v1211;
 
+import com.mciot.core.api.BlockIoTConfig;
 import com.mciot.core.api.BlockPosKey;
 import com.mciot.core.api.McIoTHub;
 import com.mciot.core.api.WorldEventContext;
@@ -20,7 +21,7 @@ import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * [Minecraft 1.20.5 ~ 1.21.1+ 适配层] IoT 物联信号收发方块
- * 适配 1.20.5+ 将 Block.use() 拆分为 useWithoutItem() 的 API 变更。
+ * 适配 1.20.5+ 将 Block.use() 拆分为 useWithoutItem() 的 API 变更，并支持 Shift+右键打开配置 GUI。
  */
 public class IoTTransceiverBlockV1211 extends Block {
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
@@ -61,34 +62,49 @@ public class IoTTransceiverBlockV1211 extends Block {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hitResult) {
+        if (player.isShiftKeyDown()) {
+            if (level.isClientSide) {
+                openConfigScreenClient(level.dimension().location().toString(), pos.getX(), pos.getY(), pos.getZ());
+            }
+            return InteractionResult.SUCCESS;
+        }
+
         if (level.isClientSide) return InteractionResult.SUCCESS;
 
         BlockPosKey key = toKey(level, pos);
-        if (player.isShiftKeyDown()) {
-            String channel = McIoTHub.getInstance().getPendingBindChannel();
-            McIoTHub.getInstance().bindBlock(key, channel);
-            player.displayClientMessage(Component.literal("§a[MC-IoT] 该方块已绑定至硬件通道: §e" + channel), true);
-        } else {
-            boolean nextPowered = !state.getValue(POWERED);
-            int nextSignal = nextPowered ? 15 : 0;
-            level.setBlock(pos, state.setValue(POWERED, nextPowered).setValue(POWER, nextSignal), 3);
-            level.updateNeighborsAt(pos, this);
-            for (Direction dir : Direction.values()) {
-                level.updateNeighborsAt(pos.relative(dir), this);
-            }
+        boolean nextPowered = !state.getValue(POWERED);
+        int nextSignal = nextPowered ? 15 : 0;
+        level.setBlock(pos, state.setValue(POWERED, nextPowered).setValue(POWER, nextSignal), 3);
+        level.updateNeighborsAt(pos, this);
+        for (Direction dir : Direction.values()) {
+            level.updateNeighborsAt(pos.relative(dir), this);
+        }
 
-            String boundChannel = McIoTHub.getInstance().getBoundChannel(key);
+        BlockIoTConfig cfg = McIoTHub.getInstance().getBlockConfig(key);
+        if (cfg.sendOnClick()) {
             McIoTHub.getInstance().fireWorldEvent(new WorldEventContext(
                     WorldEventContext.Type.BLOCK_INTERACT,
                     "click",
                     nextSignal,
-                    boundChannel,
+                    cfg.channel(),
                     key
             ));
-            player.displayClientMessage(Component.literal("§b[MC-IoT] 已向单片机发送反向信号 (通道: "
-                    + boundChannel + ", 强度: " + nextSignal + ")"), true);
+            player.displayClientMessage(Component.literal("§b[MC-IoT] 已向单片机发送反向信号 (目标: "
+                    + cfg.downlinkChannel() + " / 绑定通道: " + cfg.channel() + ", 强度: " + nextSignal + ")"), true);
+        } else {
+            player.displayClientMessage(Component.literal("§7[MC-IoT] 本地切换方块红石强度: §e" + nextSignal
+                    + " §8(右键发送已在 GUI 中关闭)"), true);
         }
         return InteractionResult.CONSUME;
+    }
+
+    private static void openConfigScreenClient(String dimension, int x, int y, int z) {
+        try {
+            Class<?> cls = Class.forName("com.mciot.adapter.v1201.IoTConfigScreenV1201");
+            cls.getMethod("open", String.class, int.class, int.class, int.class)
+                    .invoke(null, dimension, x, y, z);
+        } catch (Throwable ignored) {
+        }
     }
 
     protected void neighborChanged(BlockState state, Level level, BlockPos pos,
@@ -97,13 +113,16 @@ public class IoTTransceiverBlockV1211 extends Block {
         int receivedPower = level.getBestNeighborSignal(pos);
         if (receivedPower > 0 && receivedPower != state.getValue(POWER)) {
             BlockPosKey key = toKey(level, pos);
-            McIoTHub.getInstance().fireWorldEvent(new WorldEventContext(
-                    WorldEventContext.Type.BLOCK_REDSTONE_CHANGE,
-                    "redstone_input",
-                    receivedPower,
-                    McIoTHub.getInstance().getBoundChannel(key),
-                    key
-            ));
+            BlockIoTConfig cfg = McIoTHub.getInstance().getBlockConfig(key);
+            if (cfg.sendOnRedstone()) {
+                McIoTHub.getInstance().fireWorldEvent(new WorldEventContext(
+                        WorldEventContext.Type.BLOCK_REDSTONE_CHANGE,
+                        "redstone_input",
+                        receivedPower,
+                        cfg.channel(),
+                        key
+                ));
+            }
         }
     }
 

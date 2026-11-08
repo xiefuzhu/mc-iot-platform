@@ -11,7 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,24 +26,31 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 负责管理：
  * 1. 内置双向 WebSocket/HTTP 服务端 (McIoTServer)
  * 2. 跨版本插件注册表 (IMcIoTPlugin)
- * 3. 游戏内 IoT 方块坐标 <-> 硬件通道 (Channel) 的绑定映射表
+ * 3. 游戏内 IoT 方块坐标 <-> 硬件通道与独立通信配置 (BlockIoTConfig) 的映射表
  */
 public final class McIoTHub {
     private static final Path BINDINGS_FILE = Paths.get("mciot-bindings.txt");
+    private static final List<String> PRESET_CHANNELS = Arrays.asList(
+            "btn_boot", "btn_1", "btn_2", "knob_1", "knob_2", "sensor_1", "relay_1", "rgb_raw"
+    );
     private static final McIoTHub INSTANCE = new McIoTHub();
 
     private final McIoTServer netServer;
     private final List<IMcIoTPlugin> plugins = new CopyOnWriteArrayList<>();
-    private final Map<BlockPosKey, String> posToChannel = new ConcurrentHashMap<>();
+    private final Map<BlockPosKey, BlockIoTConfig> posToConfig = new ConcurrentHashMap<>();
     private final Map<String, Set<BlockPosKey>> channelToPositions = new ConcurrentHashMap<>();
     private final Map<String, Integer> channelLastValue = new ConcurrentHashMap<>();
+    private final Set<String> discoveredChannels = ConcurrentHashMap.newKeySet();
 
     private volatile IMcWorldBridge worldBridge;
-    private volatile String pendingBindChannel = "btn_boot"; // 默认右键绑定的通道名
+    private volatile String pendingBindChannel = "btn_boot"; // 默认放置时绑定的通道名
+    private volatile boolean weatherSyncEnabled = true;      // 是否向单片机推送天气变化
+    private volatile boolean chatBroadcastEnabled = true;    // 是否在聊天栏显示硬件信号提示
     private int configuredPort = 25580;
 
     private McIoTHub() {
         this.netServer = new McIoTServer(this::handleIncomingFromDevice);
+        discoveredChannels.addAll(PRESET_CHANNELS);
         loadBindingsFromDisk();
         // 默认挂载两个核心双向插件
         registerPlugin(new BlockChannelSyncPlugin());
@@ -98,24 +108,74 @@ public final class McIoTHub {
     public void setPendingBindChannel(String channel) {
         if (channel != null && !channel.isBlank()) {
             this.pendingBindChannel = channel.trim();
+            discoveredChannels.add(this.pendingBindChannel);
         }
     }
 
+    public boolean isWeatherSyncEnabled() { return weatherSyncEnabled; }
+    public void setWeatherSyncEnabled(boolean enabled) {
+        this.weatherSyncEnabled = enabled;
+        saveBindingsToDisk();
+    }
+
+    public boolean isChatBroadcastEnabled() { return chatBroadcastEnabled; }
+    public void setChatBroadcastEnabled(boolean enabled) {
+        this.chatBroadcastEnabled = enabled;
+        saveBindingsToDisk();
+    }
+
+    /**
+     * 获取当前所有可选的硬件通道列表（包含预设通道 + 单片机上报过的通道 + 玩家自定义通道）
+     */
+    public List<String> getAvailableChannels() {
+        Set<String> ordered = new LinkedHashSet<>(PRESET_CHANNELS);
+        ordered.addAll(discoveredChannels);
+        ordered.addAll(channelToPositions.keySet());
+        return new ArrayList<>(ordered);
+    }
+
+    public int getChannelLastValue(String channel) {
+        return channelLastValue.getOrDefault(channel, 0);
+    }
+
     // ========================================================================
-    // 方块坐标 <-> 硬件通道 (Channel) 绑定管理
+    // 方块坐标 <-> 硬件通道与独立通信配置 (BlockIoTConfig) 管理
     // ========================================================================
     public void bindBlock(BlockPosKey pos, String channel) {
+        BlockIoTConfig existing = posToConfig.get(pos);
+        if (existing != null) {
+            BlockIoTConfig updated = existing.copy();
+            updated.setChannel(channel);
+            updateBlockConfig(pos, updated);
+        } else {
+            updateBlockConfig(pos, new BlockIoTConfig(channel));
+        }
+    }
+
+    public void updateBlockConfig(BlockPosKey pos, BlockIoTConfig config) {
+        if (pos == null || config == null) return;
         unbindBlockInternal(pos);
-        posToChannel.put(pos, channel);
-        channelToPositions.computeIfAbsent(channel, k -> ConcurrentHashMap.newKeySet()).add(pos);
+        BlockIoTConfig copy = config.copy();
+        posToConfig.put(pos, copy);
+        discoveredChannels.add(copy.channel());
+        channelToPositions.computeIfAbsent(copy.channel(), k -> ConcurrentHashMap.newKeySet()).add(pos);
         saveBindingsToDisk();
 
-        // 如果该通道已有最新状态，立即同步到新绑定的方块
-        Integer lastVal = channelLastValue.get(channel);
-        if (lastVal != null && worldBridge != null) {
-            int signal = Math.max(0, Math.min(15, lastVal));
+        // 如果该通道已有最新状态且开启了接收开关，立即同步到该方块
+        Integer lastVal = channelLastValue.get(copy.channel());
+        if (lastVal != null && worldBridge != null && copy.acceptFromDevice()) {
+            int raw = Math.max(0, Math.min(15, lastVal));
+            int signal = copy.invertSignal() ? (15 - raw) : raw;
             worldBridge.applyIoTBlockState(pos, signal > 0, signal);
         }
+    }
+
+    public BlockIoTConfig getBlockConfig(BlockPosKey pos) {
+        BlockIoTConfig cfg = posToConfig.get(pos);
+        if (cfg != null) {
+            return cfg.copy();
+        }
+        return new BlockIoTConfig(pendingBindChannel);
     }
 
     public void unbindBlock(BlockPosKey pos) {
@@ -125,9 +185,9 @@ public final class McIoTHub {
     }
 
     private boolean unbindBlockInternal(BlockPosKey pos) {
-        String oldChannel = posToChannel.remove(pos);
-        if (oldChannel != null) {
-            Set<BlockPosKey> set = channelToPositions.get(oldChannel);
+        BlockIoTConfig oldCfg = posToConfig.remove(pos);
+        if (oldCfg != null) {
+            Set<BlockPosKey> set = channelToPositions.get(oldCfg.channel());
             if (set != null) set.remove(pos);
             return true;
         }
@@ -135,14 +195,23 @@ public final class McIoTHub {
     }
 
     public boolean isBlockBound(BlockPosKey pos) {
-        return posToChannel.containsKey(pos);
+        return posToConfig.containsKey(pos);
     }
 
     private synchronized void saveBindingsToDisk() {
         try (BufferedWriter writer = Files.newBufferedWriter(BINDINGS_FILE, StandardCharsets.UTF_8)) {
-            for (Map.Entry<BlockPosKey, String> entry : posToChannel.entrySet()) {
+            writer.write("#GLOBAL|" + weatherSyncEnabled + "|" + chatBroadcastEnabled + "|" + pendingBindChannel);
+            writer.newLine();
+            for (Map.Entry<BlockPosKey, BlockIoTConfig> entry : posToConfig.entrySet()) {
                 BlockPosKey k = entry.getKey();
-                writer.write(k.dimension() + "|" + k.x() + "|" + k.y() + "|" + k.z() + "|" + entry.getValue());
+                BlockIoTConfig c = entry.getValue();
+                writer.write(k.dimension() + "|" + k.x() + "|" + k.y() + "|" + k.z() + "|"
+                        + c.channel() + "|"
+                        + c.acceptFromDevice() + "|"
+                        + c.sendOnClick() + "|"
+                        + c.sendOnRedstone() + "|"
+                        + c.invertSignal() + "|"
+                        + c.downlinkChannel());
                 writer.newLine();
             }
         } catch (Exception ignored) {
@@ -150,12 +219,23 @@ public final class McIoTHub {
     }
 
     private synchronized void loadBindingsFromDisk() {
-        if (!Files.exists(BINDINGS_FILE)) return;
+        if (BINDINGS_FILE == null || !Files.exists(BINDINGS_FILE)) return;
         try (BufferedReader reader = Files.newBufferedReader(BINDINGS_FILE, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.trim().split("\\|");
-                if (parts.length == 5) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+                if (trimmed.startsWith("#GLOBAL|")) {
+                    String[] g = trimmed.split("\\|");
+                    if (g.length >= 4) {
+                        weatherSyncEnabled = Boolean.parseBoolean(g[1]);
+                        chatBroadcastEnabled = Boolean.parseBoolean(g[2]);
+                        setPendingBindChannel(g[3]);
+                    }
+                    continue;
+                }
+                String[] parts = trimmed.split("\\|");
+                if (parts.length >= 5) {
                     BlockPosKey key = new BlockPosKey(
                             parts[0],
                             Integer.parseInt(parts[1]),
@@ -163,8 +243,22 @@ public final class McIoTHub {
                             Integer.parseInt(parts[3])
                     );
                     String ch = parts[4];
-                    posToChannel.put(key, ch);
-                    channelToPositions.computeIfAbsent(ch, k -> ConcurrentHashMap.newKeySet()).add(key);
+                    BlockIoTConfig cfg;
+                    if (parts.length >= 10) {
+                        cfg = new BlockIoTConfig(
+                                ch,
+                                Boolean.parseBoolean(parts[5]),
+                                Boolean.parseBoolean(parts[6]),
+                                Boolean.parseBoolean(parts[7]),
+                                Boolean.parseBoolean(parts[8]),
+                                parts[9]
+                        );
+                    } else {
+                        cfg = new BlockIoTConfig(ch);
+                    }
+                    posToConfig.put(key, cfg);
+                    discoveredChannels.add(cfg.channel());
+                    channelToPositions.computeIfAbsent(cfg.channel(), k -> ConcurrentHashMap.newKeySet()).add(key);
                 }
             }
         } catch (Exception ignored) {
@@ -172,7 +266,8 @@ public final class McIoTHub {
     }
 
     public String getBoundChannel(BlockPosKey pos) {
-        return posToChannel.getOrDefault(pos, pendingBindChannel);
+        BlockIoTConfig cfg = posToConfig.get(pos);
+        return cfg != null ? cfg.channel() : pendingBindChannel;
     }
 
     public Set<BlockPosKey> getBlocksForChannel(String channel) {
@@ -181,12 +276,18 @@ public final class McIoTHub {
 
     public void updateChannelState(String channel, int signalValue) {
         int clamped = Math.max(0, Math.min(15, signalValue));
+        discoveredChannels.add(channel);
         channelLastValue.put(channel, clamped);
         IMcWorldBridge bridge = this.worldBridge;
         if (bridge == null) return;
 
         for (BlockPosKey pos : getBlocksForChannel(channel)) {
-            bridge.applyIoTBlockState(pos, clamped > 0, clamped);
+            BlockIoTConfig cfg = posToConfig.get(pos);
+            if (cfg != null && !cfg.acceptFromDevice()) {
+                continue; // 该方块已在 GUI 中关闭“接收单片机信号”，跳过更新以防信号互相覆盖
+            }
+            int finalSignal = (cfg != null && cfg.invertSignal()) ? (15 - clamped) : clamped;
+            bridge.applyIoTBlockState(pos, finalSignal > 0, finalSignal);
         }
     }
 
@@ -198,6 +299,9 @@ public final class McIoTHub {
      * 收到来自 ESP32 的上行数据包 -> 自动切换到 MC 主线程并分发给所有插件
      */
     private void handleIncomingFromDevice(IoTMessage message) {
+        if (message.channel() != null && !message.channel().isBlank() && !"system".equals(message.channel())) {
+            discoveredChannels.add(message.channel());
+        }
         IMcWorldBridge bridge = this.worldBridge;
         if (bridge == null) return;
 
