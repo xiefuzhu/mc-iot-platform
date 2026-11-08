@@ -1,8 +1,12 @@
 package com.mciot.adapter.v1201;
 
 import com.mciot.core.api.McIoTHub;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.common.MinecraftForge;
@@ -26,6 +30,7 @@ public class ForgeEntryV1201 {
 
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, MOD_ID);
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MOD_ID);
+    public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
 
     public static final RegistryObject<Block> IOT_TRANSCEIVER = BLOCKS.register("iot_transceiver",
             () -> new IoTTransceiverBlockV1201(BlockBehaviour.Properties.of()
@@ -35,10 +40,18 @@ public class ForgeEntryV1201 {
     public static final RegistryObject<Item> IOT_TRANSCEIVER_ITEM = ITEMS.register("iot_transceiver",
             () -> new BlockItem(IOT_TRANSCEIVER.get(), new Item.Properties()));
 
+    public static final RegistryObject<CreativeModeTab> MCIOT_TAB = TABS.register("main",
+            () -> CreativeModeTab.builder()
+                    .title(Component.translatable("itemGroup.mciot"))
+                    .icon(() -> new ItemStack(IOT_TRANSCEIVER_ITEM.get()))
+                    .displayItems((params, output) -> output.accept(IOT_TRANSCEIVER_ITEM.get()))
+                    .build());
+
     public ForgeEntryV1201() {
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
+        TABS.register(modBus);
 
         IEventBus forgeBus = MinecraftForge.EVENT_BUS;
         forgeBus.addListener((RegisterCommandsEvent e) -> McWorldBridgeV1201.registerCommands(e.getDispatcher()));

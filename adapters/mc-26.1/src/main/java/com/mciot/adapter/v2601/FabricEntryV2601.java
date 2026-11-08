@@ -9,19 +9,18 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.core.BlockPos;
+import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * [Minecraft 1.21.2 ~ 26.1+ 适配层]
@@ -47,6 +46,12 @@ public class FabricEntryV2601 implements ModInitializer {
         Registry.register(BuiltInRegistries.BLOCK, BLOCK_KEY, IOT_TRANSCEIVER);
         Registry.register(BuiltInRegistries.ITEM, ITEM_KEY,
                 new BlockItem(IOT_TRANSCEIVER, new Item.Properties().setId(ITEM_KEY).useBlockDescriptionPrefix()));
+        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, ResourceLocation.fromNamespaceAndPath(MOD_ID, "main"),
+                FabricItemGroup.builder()
+                        .title(Component.translatable("itemGroup.mciot"))
+                        .icon(() -> new ItemStack(IOT_TRANSCEIVER))
+                        .displayItems((params, output) -> output.accept(IOT_TRANSCEIVER))
+                        .build());
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, env) ->
                 McWorldBridgeV1201.registerCommands(dispatcher));

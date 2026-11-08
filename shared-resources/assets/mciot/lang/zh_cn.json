@@ -1,4 +1,5 @@
 {
   "block.mciot.iot_transceiver": "IoT 物联信号收发方块",
-  "item.mciot.iot_transceiver": "IoT 物联信号收发方块"
+  "item.mciot.iot_transceiver": "IoT 物联信号收发方块",
+  "itemGroup.mciot": "MC-IoT 硬件物联"
 }

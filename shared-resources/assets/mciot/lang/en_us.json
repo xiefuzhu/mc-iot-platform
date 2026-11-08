@@ -1,4 +1,5 @@
 {
   "block.mciot.iot_transceiver": "IoT Transceiver Block",
-  "item.mciot.iot_transceiver": "IoT Transceiver Block"
+  "item.mciot.iot_transceiver": "IoT Transceiver Block",
+  "itemGroup.mciot": "MC-IoT Hardware"
 }
